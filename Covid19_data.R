@@ -1,67 +1,57 @@
+library(readr)
 
-library(readstata13)
+urlfile="https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv"
+
+da <-read_csv(url(urlfile))
+
+# I don't like the analysis by province because only some 
+# countries have province data
+
 library(dplyr)
+da = select(da, -c(`Province/State`, Lat, Long))
+da = da %>%
+  rename(country = `Country/Region`) %>%
+  group_by(country) %>%
+  summarise_all(mean)
+
 library(tidyr)
+da = da  %>%
+  pivot_longer(-country, "date", values_to = "cases") %>%
+  mutate(date = as.Date(date, format = "%m/%d/%y"))
 
+da_DE = da  %>%
+  filter(country == "Germany")
 
-setwd("~/Dropbox/officeb2b")
+library(ggplot2)
+ggplot(data = da_DE,
+       aes(x = date, y = cases)) +
+  geom_point() + geom_line() +
+  scale_y_continuous(name = "cumulative cases") +
+  theme_light()
 
-dakope = read.dta13("Raw Data/KOPE2neu.dta")
-colnames(dakope) <- tolower(colnames(dakope))
-dakope = dakope %>%
-  dplyr::select(kundennr, kopenr, abteilungs_kz) %>%
-  mutate(kundennr = as.character(kundennr))
-dakope = distinct(dakope)
-dakope = dakope %>%
-  group_by(kundennr, kopenr) %>%
-  summarise(abteilungs_kz = sample(abteilungs_kz, 1))
+ggplot(data = da_DE,
+       aes(x = date, y = cases)) +
+  geom_point() + geom_line() +
+  scale_y_continuous(name = "cumulative cases",
+                     trans = "log10") +
+  ggtitle("Germany COVID-19") +
+  theme_light()
 
+selected_countries = c("Italy",
+                       "Germany",
+                       "France",
+                       "Spain",
+                       "United Kingdom",
+                       "Netherlands")
 
+da %>%
+  filter(country %in% selected_countries) %>%
+  ggplot(aes(x = date, y = cases)) +
+  geom_point() + geom_line() +
+  scale_y_continuous(name = "cumulative cases",
+                     trans = "log10") +
+  facet_wrap(~country) + 
+  theme_light()
 
-dan = read.csv("Raw Data/181001 Data.csv", numerals = "no.loss")
-
-# set variable names to lower case.
-colnames(dan) <- tolower(colnames(dan))
-
-
-da = dan %>%
-  select(artikelnr,
-         artikelgruppe,
-         kundennr,
-         menge,
-         rohertrag_basis,
-         betriebsgroessennr,
-         auftrags_dt,  
-         uebermittlungsnr,
-         kontakt_key,
-         vhproduktgruppe,
-         kopenr) %>%
-  mutate(date =  as.Date(as.character(auftrags_dt), format="%Y%m%d"),
-         kundennr = as.character(kundennr),
-         rev = as.numeric(as.character(rohertrag_basis)),
-         menge = as.numeric(as.character(menge)),
-         month_year= as.Date(cut(date, "month"))) %>%
-  filter(rev >= 0) %>%
-  filter(date > as.Date("2005-01-01")) %>%       # filter a few early dates
-  filter(date < as.Date("2012-12-01")) %>%       # filter a few late dates
-  rename(cust_type = betriebsgroessennr) %>%
-  filter(cust_type %in% c("A", "B", "C", "D", "E", "F", "G")) %>%
-  mutate(digital = if_else(uebermittlungsnr > 20, 1, 0)) 
-
-
-da = da %>%
-  group_by(artikelnr) %>%
-  mutate(av_price = mean(rev/menge, na.rm = TRUE)) %>%
-  ungroup() %>%
-  mutate(price_ind = abs((rev/menge)/av_price)) %>%
-  group_by(artikelnr) %>%
-  mutate(price_ind_995 = quantile(price_ind, .99, na.rm = TRUE)) %>%
-  mutate(price_ind = pmin(price_ind, price_ind_995)) %>%
-  ungroup() %>%
-  mutate(month_year = as.Date(cut(date, "month")),
-         price_ind  = replace_na(price_ind, 1))
-
-da = da %>%
-  left_join(dakope)
 
 
